@@ -17,16 +17,15 @@ const Schema = mongoose.Schema;
 // COURT_OUTCOME – The registered court decision resulting from the issuance of a ticket or summons for outstanding infractions to the Health Protection and Promotion Act
 // AMOUNT_FINED – Fine determined in a court outcome
 
-
 const inspectionSchema = new Schema({
-    inpsection_id: Number,
+    inspection_id: Number,
     infraction_details: String,
     inspection_date: String,
     severity: String,
     action: String,
     court_outcome: String,
     amount_fined: String
-})
+});
 
 const Inspection = mongoose.model('Inspection', inspectionSchema);
 
@@ -35,12 +34,16 @@ const restaurantSchema = new Schema({
     establishment_name: String,
     establishment_type: String,
     establishment_address: String,
-    establishment_status: String,
-    lat: String,
-    lng: String,
+    establishment_status:    String,
+    location: {
+        type: {type: "String", default: "Point"},
+        coordinates: [Number,Number]
+    },
     minimum_inspections_per_year: String,
     inspections: [{ ref: 'Inspection', type: Schema.Types.ObjectId }]
 });
+
+restaurantSchema.index({ loc: '2dsphere' });
 
 const Restaurant = mongoose.model('Restaurant',restaurantSchema);
 

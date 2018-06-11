@@ -15,7 +15,30 @@ function isEmptyObject(obj) {
     return Object.keys(obj).length === 0 && obj.constructor === Object
 }
 
+function restaurantExists(id) {
+    return new Promise((res,rej) => {
+        models.Restaurant.findOne({establishment_id:id},(err,doc) => {
+            if(err || doc === null) {
+                res([err,false]);
+            }
+            res([null,true]);
+        });
+    });
+}
+function inspectionExists(id) {
+    return new Promise((res, rej) => {
+        models.Inspection.findOne({ inspection_id: id }, (err, doc) => {
+            if (err || doc === null) {
+                res([err, false]);
+            }
+            res([null, true]);
+        });
+    });
+}
+
+
 utils.downloadFile = (fileURL) => {
+    console.log('Starting Download');
     return new Promise((res,rej) => {
         const splitPath = fileURL.split('/');
         const fileName = splitPath[splitPath.length - 1];
@@ -33,6 +56,7 @@ utils.downloadFile = (fileURL) => {
 };
 
 utils.unzipFile = (fileName) => {
+    console.log('Unzipping File');
     return new Promise((res,rej) => {
         fs.createReadStream(`./tmp/${fileName}`)
             .on('end', () => res(fileName))
@@ -44,6 +68,7 @@ utils.unzipFile = (fileName) => {
 };
 
 utils.readXML = (fileName) => {
+    console.log("Reading XML");
     return new Promise((res,rej) => {
         const file = fileName.replace('.zip','');
         const XMLdata = fs.readFileSync(`./tmp/${file}/${file}.xml`)
@@ -54,11 +79,19 @@ utils.readXML = (fileName) => {
 };
 
 utils.importRestaurants = (restaurants) => {
+    console.log('Importing Restaurants');
     return Object.keys(restaurants)
         .map(key => restaurants[key])
         .reduce((p,curr) => {
             return p.then(() => {
-                return new Promise((res,rej) => {
+                return new Promise(async (res,rej) => {
+                    const [err,exists] = await restaurantExists(curr.establishment_id);
+
+                    if(err || exists) {
+                        res();
+                        return;
+                    }
+
                     const restaurant = new models.Restaurant(curr);
                     restaurant.save((err) => {
                         if (err) rej(err);
@@ -70,6 +103,7 @@ utils.importRestaurants = (restaurants) => {
 };
 
 utils.importInspections = (inspections) => {
+    console.log("Importing Inspections");
     return Object.keys(inspections)
         .map(key => ({ id: key, inspections: inspections[key] }))
         .reduce((p,curr) => {
@@ -77,6 +111,10 @@ utils.importInspections = (inspections) => {
                 //curr.inspection is an array
                 return Promise.all(
                     curr.inspections
+                    .filter(async (inspection) => {
+                        const [err,exists] = await inspectionExists(inspection.inspection_id);
+                        return exists === false;
+                    })
                     .map(inspection => new models.Inspection(inspection))
                     .map(inspection => new Promise((res,rej) => {
                         inspection.save((err,savedInspection) => {
@@ -103,7 +141,7 @@ utils.importData = (dinesafeData) => {
             acc[ID] = []
         }
         acc[ID].push({
-            inpsection_id: curr.INSPECTION_ID,
+            inspection_id: curr.INSPECTION_ID,
             infraction_details: isEmptyObject(curr.INFRACTION_DETAILS) ? '' : curr.INFRACTION_DETAILS,
             inspection_date: curr.INSPECTION_DATE,
             severity: isEmptyObject(curr.SEVERITY) ? '' : curr.SEVERITY,
@@ -125,8 +163,10 @@ utils.importData = (dinesafeData) => {
             establishment_type: curr.ESTABLISHMENTTYPE,
             establishment_address: curr.ESTABLISHMENT_ADDRESS,
             establishment_status: curr.ESTABLISHMENT_STATUS,
-            lat: curr.LATITUDE,
-            lng: curr.LONGITUDE,
+            location: {
+                type: "Point",
+                coordinates: [curr.LONGITUDE, curr.LATITUDE]
+            },
             minimum_inspections_per_year: curr.MINIMUM_INSPECTIONS_PERYEAR,
         }
         return acc;

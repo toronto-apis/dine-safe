@@ -1,20 +1,6 @@
 const express = require('express');
 const app = express();
-const utils = require('./utils');
 const models = require('./models');
-
-
-function importData() {
-    //Need to fix this to check for resta urants is they already exist
-    //and only add new ones/new inspections
-    utils
-        .downloadFile('http://opendata.toronto.ca/public.health/dinesafe/dinesafe.zip')
-        .then(utils.unzipFile)
-        .then(utils.readXML)
-        .then(utils.importData)
-        .then(() => console.log('done'))
-        .catch((err) => console.log(err));
-}
 
 function getCount(query,model) {
     return new Promise((res,rej) =>{
