@@ -9,7 +9,7 @@ function importData() {
         .then(utils.readXML)
         .then(utils.importData)
         .then(() => {
-            console.log('done')
+            console.log(new Date(),'Done');
             process.exit(0);
         })
         .catch((err) => console.log(err));

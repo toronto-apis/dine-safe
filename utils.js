@@ -38,7 +38,7 @@ function inspectionExists(id) {
 
 
 utils.downloadFile = (fileURL) => {
-    console.log('Starting Download');
+    console.log(new Date(), 'Starting Download');
     return new Promise((res,rej) => {
         const splitPath = fileURL.split('/');
         const fileName = splitPath[splitPath.length - 1];
@@ -56,7 +56,7 @@ utils.downloadFile = (fileURL) => {
 };
 
 utils.unzipFile = (fileName) => {
-    console.log('Unzipping File');
+    console.log(new Date(),'Unzipping File');
     return new Promise((res,rej) => {
         fs.createReadStream(`./tmp/${fileName}`)
             .on('end', () => res(fileName))
@@ -68,7 +68,7 @@ utils.unzipFile = (fileName) => {
 };
 
 utils.readXML = (fileName) => {
-    console.log("Reading XML");
+    console.log(new Date(),"Reading XML");
     return new Promise((res,rej) => {
         const file = fileName.replace('.zip','');
         const XMLdata = fs.readFileSync(`./tmp/${file}/${file}.xml`)
@@ -79,7 +79,7 @@ utils.readXML = (fileName) => {
 };
 
 utils.importRestaurants = (restaurants) => {
-    console.log('Importing Restaurants');
+    console.log(new Date(), 'Importing Restaurants');
     return Object.keys(restaurants)
         .map(key => restaurants[key])
         .reduce((p,curr) => {
@@ -102,19 +102,16 @@ utils.importRestaurants = (restaurants) => {
     }, Promise.resolve())
 };
 
-utils.importInspections = (inspections) => {
-    console.log("Importing Inspections");
-    return Object.keys(inspections)
+utils.importInspections = async (inspections) => {
+    console.log(new Date(),"Importing Inspections");
+    return Object
+        .keys(inspections)
         .map(key => ({ id: key, inspections: inspections[key] }))
         .reduce((p,curr) => {
             return p.then(() => {
                 //curr.inspection is an array
                 return Promise.all(
                     curr.inspections
-                    .filter(async (inspection) => {
-                        const [err,exists] = await inspectionExists(inspection.inspection_id);
-                        return exists === false;
-                    })
                     .map(inspection => new models.Inspection(inspection))
                     .map(inspection => new Promise((res,rej) => {
                         inspection.save((err,savedInspection) => {
@@ -172,8 +169,33 @@ utils.importData = (dinesafeData) => {
         return acc;
     },{});
 
-    return utils.importRestaurants(restaurants)
-        .then(() => utils.importInspections(inspections));
+    //Inspections is and object, need to go through all the array's involved.
+    const filteredInspections = {};
+    console.log(new Date(), 'Checking if inspections exist');
+    Object.keys(inspections)
+        .forEach(key => {
+            filteredInspections[key] = inspections[key].map(i => inspectionExists(i.inspection_id))
+        });
+
+    // I think the ultimate solution to this is use the .update method, with upsert and $setOnInsert.
+    return Object.keys(filteredInspections)
+        .reduce((p,curr) => {
+            return p.then(() => {
+                return Promise.all(filteredInspections[curr]).then(inspections => filteredInspections[curr] = inspections);
+            })
+        }, Promise.resolve())
+        .then(() => {
+            const finalInspections  = Object.keys(filteredInspections)
+                .reduce((acc, inspectionId) => {
+                    const inspect = filteredInspections[inspectionId].map(i => i[1] === false);
+                    acc[inspectionId] = [];
+                    acc[inspectionId] = inspect.map((exists,i) => exists ? inspections[inspectionId][i] : false );
+                    return acc;
+                },{});
+            return utils.importRestaurants(restaurants)
+                .then(() => utils.importInspections(inspections));
+
+        })
 };
 
 
