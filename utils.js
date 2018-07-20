@@ -25,17 +25,6 @@ function restaurantExists(id) {
         });
     });
 }
-function inspectionExists(id) {
-    return new Promise((res, rej) => {
-        models.Inspection.findOne({ inspection_id: id }, (err, doc) => {
-            if (err || doc === null) {
-                res([err, false]);
-            }
-            res([null, true]);
-        });
-    });
-}
-
 
 utils.downloadFile = (fileURL) => {
     console.log(new Date(), 'Starting Download');
@@ -112,19 +101,32 @@ utils.importInspections = async (inspections) => {
                 //curr.inspection is an array
                 return Promise.all(
                     curr.inspections
-                    .map(inspection => new models.Inspection(inspection))
+                    //Add update here and upsert
                     .map(inspection => new Promise((res,rej) => {
-                        inspection.save((err,savedInspection) => {
+                        models.Inspection.update({
+                            inspection_id: inspection.inspection_id
+                        },
+                        inspection,
+                        { upsert: true},
+                        (err,doc) => {
+                            if(err) {
+                                res(false)
+                                return;
+                            }
+                            res(doc)
+                        }
+                    )
+                    }))
+                    .filter(inspection => inspection)
+                    .map(inspection => new Promise((res,rej) => {
+                        models.Restaurant.findOneAndUpdate({
+                            establishment_id: curr.id
+                        },
+                        {
+                            $push: { inspections: inspection._id }
+                        },(err) => {
                             if(err) rej(err);
-                            models.Restaurant.findOneAndUpdate({
-                                establishment_id: curr.id
-                            },
-                            {
-                                $push: { inspections: savedInspection._id }
-                            },(err) => {
-                                if(err) rej(err);
-                                res();
-                            });
+                            res();
                         });
                     })));
             });
@@ -169,33 +171,8 @@ utils.importData = (dinesafeData) => {
         return acc;
     },{});
 
-    //Inspections is and object, need to go through all the array's involved.
-    const filteredInspections = {};
-    console.log(new Date(), 'Checking if inspections exist');
-    Object.keys(inspections)
-        .forEach(key => {
-            filteredInspections[key] = inspections[key].map(i => inspectionExists(i.inspection_id))
-        });
-
-    // I think the ultimate solution to this is use the .update method, with upsert and $setOnInsert.
-    return Object.keys(filteredInspections)
-        .reduce((p,curr) => {
-            return p.then(() => {
-                return Promise.all(filteredInspections[curr]).then(inspections => filteredInspections[curr] = inspections);
-            })
-        }, Promise.resolve())
-        .then(() => {
-            const finalInspections  = Object.keys(filteredInspections)
-                .reduce((acc, inspectionId) => {
-                    const inspect = filteredInspections[inspectionId].map(i => i[1] === false);
-                    acc[inspectionId] = [];
-                    acc[inspectionId] = inspect.map((exists,i) => exists ? inspections[inspectionId][i] : false );
-                    return acc;
-                },{});
-            return utils.importRestaurants(restaurants)
-                .then(() => utils.importInspections(inspections));
-
-        })
+    return utils.importRestaurants(restaurants)
+        .then(() => utils.importInspections(inspections));
 };
 
 
