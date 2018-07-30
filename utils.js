@@ -91,7 +91,7 @@ utils.importRestaurants = (restaurants) => {
     }, Promise.resolve())
 };
 
-utils.importInspections = async (inspections) => {
+utils.importInspections = (inspections) => {
     console.log(new Date(),"Importing Inspections");
     return Object
         .keys(inspections)
@@ -102,12 +102,12 @@ utils.importInspections = async (inspections) => {
                 return Promise.all(
                     curr.inspections
                     //Add update here and upsert
-                    .map(inspection => new Promise((res,rej) => {
+                    .map(inspection => new Promise((res) => {
                         models.Inspection.update({
-                            inspection_id: inspection.inspection_id
+                            row_id: inspection.row_id
                         },
                         inspection,
-                        { upsert: true},
+                        { upsert: true },
                         (err,doc) => {
                             if(err) {
                                 res(false)
@@ -119,15 +119,21 @@ utils.importInspections = async (inspections) => {
                     }))
                     .filter(inspection => inspection)
                     .map(inspection => new Promise((res,rej) => {
-                        models.Restaurant.findOneAndUpdate({
-                            establishment_id: curr.id
-                        },
-                        {
-                            $push: { inspections: inspection._id }
-                        },(err) => {
-                            if(err) rej(err);
-                            res();
-                        });
+                        inspection.then((doc) => {
+                            if(doc.upserted === undefined) {
+                                res();
+                                return;
+                            }
+                            models.Restaurant.findOneAndUpdate({
+                                establishment_id: curr.id
+                            },
+                            {
+                                $push: { inspections: doc.upserted[0]._id }
+                            },(err) => {
+                                if(err) rej(err);
+                                res();
+                            });
+                        })
                     })));
             });
         }, Promise.resolve())
@@ -146,7 +152,8 @@ utils.importData = (dinesafeData) => {
             severity: isEmptyObject(curr.SEVERITY) ? '' : curr.SEVERITY,
             action: isEmptyObject(curr.ACTION) ? '' : curr.ACTION,
             court_outcome: isEmptyObject(curr.COURT_OUTCOME) ? '' : curr.COURT_OUTCOME,
-            amount_fined: isEmptyObject(curr.AMOUNT_FINED) ? '' : curr.AMOUNT_FINED
+            amount_fined: isEmptyObject(curr.AMOUNT_FINED) ? '' : curr.AMOUNT_FINED,
+            row_id: curr.ROW_ID
         });
         return acc;
     },{});

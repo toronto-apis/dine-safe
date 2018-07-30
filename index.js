@@ -11,7 +11,7 @@ function getCount(query,model) {
     });
 }
 
-app.get('/', (req,res) => {
+app.get('/', (_,res) => {
     models.Info.findOne((err,doc) =>{
         if(err) {
             res

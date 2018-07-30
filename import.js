@@ -1,5 +1,6 @@
 const utils = require('./utils');
 const models = require('./models');
+const mongoose = require('mongoose');
 
 mongoose.connect('mongodb://localhost/dinesafe');
 
@@ -14,7 +15,6 @@ function importData() {
         .then(utils.readXML)
         .then(utils.importData)
         .then(() => {
-            console.log(new Date(),'Done');
             const current_inspection_count = models.Inspection.count();
             const current_restaurant_count = models.Restaurant.count();
             const info = new models.Info({
@@ -24,7 +24,12 @@ function importData() {
                 current_inspection_count,
                 previous_inspection_count
             });
-            info.save(() => {
+            info.save((err) => {
+                if(err) {
+                    console.log("Info error",err);
+                }
+                console.log(info);
+                console.log(new Date(),'Done');
                 process.exit(0);
             });
         })

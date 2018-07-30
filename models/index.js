@@ -24,7 +24,8 @@ const inspectionSchema = new Schema({
     severity: String,
     action: String,
     court_outcome: String,
-    amount_fined: String
+    amount_fined: String,
+    row_id: Number
 });
 
 const Inspection = mongoose.model('Inspection', inspectionSchema);
