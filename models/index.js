@@ -24,7 +24,8 @@ const inspectionSchema = new Schema({
     severity: String,
     action: String,
     court_outcome: String,
-    amount_fined: String
+    amount_fined: String,
+    row_id: Number
 });
 
 const Inspection = mongoose.model('Inspection', inspectionSchema);
@@ -47,5 +48,14 @@ restaurantSchema.index({ loc: '2dsphere' });
 
 const Restaurant = mongoose.model('Restaurant',restaurantSchema);
 
+const infoSchema = new Schema({
+    date: Date,
+    current_restaurant_count: Number,
+    previous_restaurant_count: Number,
+    current_inspection_count: Number,
+    previous_inspection_count: Number
+});
 
-module.exports = { Restaurant, Inspection };
+const Info = mongoose.model('Info',infoSchema);
+
+module.exports = { Restaurant, Inspection, Info };

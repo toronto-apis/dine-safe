@@ -25,17 +25,6 @@ function restaurantExists(id) {
         });
     });
 }
-function inspectionExists(id) {
-    return new Promise((res, rej) => {
-        models.Inspection.findOne({ inspection_id: id }, (err, doc) => {
-            if (err || doc === null) {
-                res([err, false]);
-            }
-            res([null, true]);
-        });
-    });
-}
-
 
 utils.downloadFile = (fileURL) => {
     console.log(new Date(), 'Starting Download');
@@ -102,7 +91,7 @@ utils.importRestaurants = (restaurants) => {
     }, Promise.resolve())
 };
 
-utils.importInspections = async (inspections) => {
+utils.importInspections = (inspections) => {
     console.log(new Date(),"Importing Inspections");
     return Object
         .keys(inspections)
@@ -112,20 +101,39 @@ utils.importInspections = async (inspections) => {
                 //curr.inspection is an array
                 return Promise.all(
                     curr.inspections
-                    .map(inspection => new models.Inspection(inspection))
+                    //Add update here and upsert
+                    .map(inspection => new Promise((res) => {
+                        models.Inspection.update({
+                            row_id: inspection.row_id
+                        },
+                        inspection,
+                        { upsert: true },
+                        (err,doc) => {
+                            if(err) {
+                                res(false)
+                                return;
+                            }
+                            res(doc)
+                        }
+                    )
+                    }))
+                    .filter(inspection => inspection)
                     .map(inspection => new Promise((res,rej) => {
-                        inspection.save((err,savedInspection) => {
-                            if(err) rej(err);
+                        inspection.then((doc) => {
+                            if(doc.upserted === undefined) {
+                                res();
+                                return;
+                            }
                             models.Restaurant.findOneAndUpdate({
                                 establishment_id: curr.id
                             },
                             {
-                                $push: { inspections: savedInspection._id }
+                                $push: { inspections: doc.upserted[0]._id }
                             },(err) => {
                                 if(err) rej(err);
                                 res();
                             });
-                        });
+                        })
                     })));
             });
         }, Promise.resolve())
@@ -144,7 +152,8 @@ utils.importData = (dinesafeData) => {
             severity: isEmptyObject(curr.SEVERITY) ? '' : curr.SEVERITY,
             action: isEmptyObject(curr.ACTION) ? '' : curr.ACTION,
             court_outcome: isEmptyObject(curr.COURT_OUTCOME) ? '' : curr.COURT_OUTCOME,
-            amount_fined: isEmptyObject(curr.AMOUNT_FINED) ? '' : curr.AMOUNT_FINED
+            amount_fined: isEmptyObject(curr.AMOUNT_FINED) ? '' : curr.AMOUNT_FINED,
+            row_id: curr.ROW_ID
         });
         return acc;
     },{});
@@ -169,33 +178,8 @@ utils.importData = (dinesafeData) => {
         return acc;
     },{});
 
-    //Inspections is and object, need to go through all the array's involved.
-    const filteredInspections = {};
-    console.log(new Date(), 'Checking if inspections exist');
-    Object.keys(inspections)
-        .forEach(key => {
-            filteredInspections[key] = inspections[key].map(i => inspectionExists(i.inspection_id))
-        });
-
-    // I think the ultimate solution to this is use the .update method, with upsert and $setOnInsert.
-    return Object.keys(filteredInspections)
-        .reduce((p,curr) => {
-            return p.then(() => {
-                return Promise.all(filteredInspections[curr]).then(inspections => filteredInspections[curr] = inspections);
-            })
-        }, Promise.resolve())
-        .then(() => {
-            const finalInspections  = Object.keys(filteredInspections)
-                .reduce((acc, inspectionId) => {
-                    const inspect = filteredInspections[inspectionId].map(i => i[1] === false);
-                    acc[inspectionId] = [];
-                    acc[inspectionId] = inspect.map((exists,i) => exists ? inspections[inspectionId][i] : false );
-                    return acc;
-                },{});
-            return utils.importRestaurants(restaurants)
-                .then(() => utils.importInspections(inspections));
-
-        })
+    return utils.importRestaurants(restaurants)
+        .then(() => utils.importInspections(inspections));
 };
 
 

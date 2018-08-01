@@ -1,12 +1,31 @@
 const express = require('express');
 const app = express();
 const models = require('./models');
+const mongoose = require('mongoose');
+
+mongoose.connect('mongodb://localhost/dinesafe');
 
 function getCount(query,model) {
-    return new Promise((res,rej) =>{
+    return new Promise((res) =>{
         models[model].count(query,(...args) => res(args));
     });
 }
+
+app.get('/', (_,res) => {
+    models.Info.findOne((err,doc) =>{
+        if(err) {
+            res
+                .status(400)
+                .send({
+                    error: err
+                });
+            return;
+        }
+        res
+            .status(200)
+            .send(doc);
+    })
+});
 
 app.get('/restaurants',(req,res) =>{
     const per_page = Number(req.query.per_page > 30 ? 30 : req.query.per_page) || 30;
